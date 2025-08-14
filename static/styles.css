@@ -1,0 +1,84 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f7f9fc;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+
+h2 {
+    text-align: center;
+    color: #222;
+    margin-bottom: 20px;
+}
+
+.container {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    max-width: 600px;
+    margin: auto;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
+}
+
+select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+/* Record Button */
+.record-btn {
+    width: 100%;
+    padding: 15px;
+    background: #4CAF50;
+    color: white;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.record-btn:hover {
+    background: #45a049;
+    transform: scale(1.05);
+}
+
+.recording {
+    background: red !important;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255,0,0,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,0,0,0); }
+}
+
+/* Chat bubbles */
+#chatHistory {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #fafafa;
+    border-radius: 6px;
+}
+
+.chat-user {
+    background: #e0f7fa;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+}
+
+.chat-bot {
+    background: #f1f8e9;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
