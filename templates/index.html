@@ -1,94 +1,132 @@
+<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Conversational AI Agent</title>
+    <title>LLM Voice Bot</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <h2>Conversational AI Agent</h2>
-    <div class="container">
-        <select id="llmVoiceSelect">
-            <option value="en-US-charles">en-US-charles (US Male)</option>
-            <option value="en-US-lucy">en-US-lucy (US Female)</option>
-            <option value="en-UK-george">en-UK-george (UK Male)</option>
-        </select>
-        <button id="recordBtn" class="record-btn">🎙 Start Recording</button>
-        <p id="llmUploadStatus"></p>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>🤖 LLM Voice Bot</h2>
+        </div>
 
-        <p><strong>Your Question:</strong></p>
-        <p id="llmTranscriptResult">[Transcript will appear here]</p>
-        <p><strong>LLM Reply:</strong></p>
-        <p id="llmTextReply">[Reply will appear here]</p>
-        <audio id="llmMurfPlayback" controls style="display:none;"></audio>
+        <div class="chat-history" id="chat-history">
+            {% for msg in chat_history %}
+                <div class="message {{ 'user' if msg.role == 'user' else 'bot' }}">
+                    <div class="bubble">{{ msg.content }}</div>
+                </div>
+            {% endfor %}
+        </div>
 
-        <h3>Chat History</h3>
-        <div id="chatHistory"></div>
+        <div class="chat-input">
+            <form id="chat-form" enctype="multipart/form-data">
+                <input type="text" id="text-input" name="text_input" placeholder="Type your message..." autocomplete="off">
+                <button type="button" id="mic-btn">🎤</button>
+                <button type="submit">Send</button>
+            </form>
+        </div>
     </div>
 
+    <audio id="ai-audio" controls hidden></audio>
+
     <script>
-        let llmMediaRecorder, llmAudioChunks = [];
-        let isRecording = false;
-        const recordBtn = document.getElementById("recordBtn");
-        const llmUploadStatus = document.getElementById("llmUploadStatus");
-        const llmTranscriptResult = document.getElementById("llmTranscriptResult");
-        const llmTextReply = document.getElementById("llmTextReply");
-        const llmMurfPlayback = document.getElementById("llmMurfPlayback");
-        const chatHistoryDiv = document.getElementById("chatHistory");
+        const chatForm = document.getElementById("chat-form");
+        const chatHistory = document.getElementById("chat-history");
+        const micBtn = document.getElementById("mic-btn");
+        const aiAudio = document.getElementById("ai-audio");
 
-        function updateChatHistory(history) {
-            chatHistoryDiv.innerHTML = "";
-            history.forEach(entry => {
-                chatHistoryDiv.innerHTML += `<div class="chat-user">You: ${entry.user}</div>
-                                             <div class="chat-bot">Bot: ${entry.bot}</div>`;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // Handle form submission (text input)
+        chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const text = document.getElementById("text-input").value;
+            if (!text.trim()) return;
+
+            addMessage("user", text);
+            document.getElementById("text-input").value = "";
+
+            const formData = new FormData();
+            formData.append("text_input", text);
+
+            const res = await fetch("/chat", {
+                method: "POST",
+                body: formData
             });
-            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight;
-        }
+            const data = await res.json();
+            addMessage("bot", data.ai_reply);
 
-        recordBtn.addEventListener("click", async () => {
-            if (!isRecording) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                llmMediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                llmAudioChunks = [];
-                llmMediaRecorder.ondataavailable = e => { if (e.data.size > 0) llmAudioChunks.push(e.data); };
-                llmMediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(llmAudioChunks, { type: 'audio/webm' });
-                    const formData = new FormData();
-                    formData.append("file", audioBlob, "query.webm");
-                    formData.append("voiceId", document.getElementById("llmVoiceSelect").value);
-                    llmUploadStatus.textContent = "Processing...";
-                    try {
-                        const res = await fetch("/llm/query", { method: "POST", body: formData });
-                        const data = await res.json();
-                        if (data.transcript && data.llm_reply) {
-                            llmTranscriptResult.textContent = data.transcript;
-                            llmTextReply.textContent = data.llm_reply;
-                            llmMurfPlayback.src = data.murf_audio_url;
-                            llmMurfPlayback.style.display = "block";
-                            llmMurfPlayback.play();
-                            updateChatHistory(data.history);
-                            llmUploadStatus.textContent = "Done!";
-                        } else {
-                            llmUploadStatus.textContent = "Error: Could not process.";
-                            llmMurfPlayback.src = "/static/fallback.mp3";
-                            llmMurfPlayback.style.display = "block";
-                            llmMurfPlayback.play();
-                        }
-                    } catch (err) {
-                        llmUploadStatus.textContent = "Error: Connection failed.";
-                    }
-                };
-                llmMediaRecorder.start();
-                recordBtn.textContent = "⏹ Stop Recording";
-                recordBtn.classList.add("recording");
-                isRecording = true;
+            aiAudio.src = "/" + data.audio_path;
+            aiAudio.hidden = false;
+            aiAudio.play();
+        });
+
+        // Mic button (audio recording)
+        micBtn.addEventListener("click", async () => {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                startRecording();
             } else {
-                llmMediaRecorder.stop();
-                recordBtn.textContent = "🎙 Start Recording";
-                recordBtn.classList.remove("recording");
-                isRecording = false;
+                stopRecording();
             }
         });
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start();
+                audioChunks = [];
+                micBtn.textContent = "⏹️";
+
+                mediaRecorder.addEventListener("dataavailable", event => {
+                    audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener("stop", () => {
+                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                    sendAudio(audioBlob);
+                    micBtn.textContent = "🎤";
+                });
+            });
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                mediaRecorder.stop();
+            }
+        }
+
+        async function sendAudio(blob) {
+            const formData = new FormData();
+            formData.append("audio", blob, "query.webm");
+
+            const res = await fetch("/chat", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            addMessage("user", data.user_text);
+            addMessage("bot", data.ai_reply);
+
+            aiAudio.src = "/" + data.audio_path;
+            aiAudio.hidden = false;
+            aiAudio.play();
+        }
+
+        function addMessage(role, text) {
+            const message = document.createElement("div");
+            message.classList.add("message", role);
+
+            const bubble = document.createElement("div");
+            bubble.classList.add("bubble");
+            bubble.textContent = text;
+
+            message.appendChild(bubble);
+            chatHistory.appendChild(message);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
     </script>
 </body>
 </html>
